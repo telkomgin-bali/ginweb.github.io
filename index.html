@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="id">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Filter Excel Telkom Gianyar</title>
+    <link rel="stylesheet" href="style.css" />
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+  </head>
+  <body>
+    <h1>Telkom Gianyar</h1>
+
+    <!-- Timestamp muncul di sini -->
+    <div id="timestamp-info" style="font-size: 13px; color: gray; margin-bottom: 12px"></div>
+
+    <div class="upload-container">
+      <label for="inputExcel">Pilih File Excel:</label>
+      <input type="file" id="inputExcel" accept=".xlsx, .xls" />
+    </div>
+
+    <input type="text" id="kolomCari" onkeyup="cariData()" placeholder="Cari di semua hasil filter..." />
+
+    <h2>Sheet: BILLPER</h2>
+    <div id="status-billper" class="status-info">Silakan unggah file Excel untuk memproses data.</div>
+    <div id="data-billper" class="table-container"></div>
+
+    <h2>Sheet: PRANPC</h2>
+    <div id="status-pranpc" class="status-info">Silakan unggah file Excel untuk memproses data.</div>
+    <div id="data-pranpc" class="table-container"></div>
+
+    <h2>Sheet: C3MR</h2>
+    <div id="status-c3mr" class="status-info">Silakan unggah file Excel untuk memproses data.</div>
+    <div id="data-c3mr" class="table-container"></div>
+
+    <script src="script.js"></script>
+  </body>
+</html>
