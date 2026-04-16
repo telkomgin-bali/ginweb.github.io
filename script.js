@@ -12,7 +12,6 @@ document.getElementById("inputExcel").addEventListener("change", function (e) {
 
       const normalisasiTeks = (teks) => teks.replace(/[^a-zA-Z0-9]/g, "").toUpperCase();
 
-      // Timestamp diproses
       const sekarang = new Date();
       const timestamp = sekarang.toLocaleString("id-ID", {
         day: "2-digit",
@@ -24,7 +23,6 @@ document.getElementById("inputExcel").addEventListener("change", function (e) {
       });
       document.getElementById("timestamp-info") && (document.getElementById("timestamp-info").innerText = "Diproses pada: " + timestamp);
 
-      // Cari sheet berdasarkan keyword (tidak peduli tanggal)
       function cariSheet(keyword) {
         return workbook.SheetNames.find((n) => n.trim().toUpperCase().includes(keyword.toUpperCase()));
       }
@@ -32,7 +30,6 @@ document.getElementById("inputExcel").addEventListener("change", function (e) {
       function prosesSheetData(keywordSheet, kolomDibutuhkan, fungsiFilter, elementIdData, elementIdStatus, fungsiMap) {
         const statusElement = document.getElementById(elementIdStatus);
         const container = document.getElementById(elementIdData);
-
         const actualSheetName = cariSheet(keywordSheet);
 
         if (!actualSheetName) {
@@ -54,13 +51,8 @@ document.getElementById("inputExcel").addEventListener("change", function (e) {
           kolomDibutuhkan.forEach((kolomTarget) => {
             const kolomTargetNormal = normalisasiTeks(kolomTarget);
             const keyAsli = Object.keys(row).find((k) => normalisasiTeks(k) === kolomTargetNormal);
-
             let nilaiAsli = keyAsli && row[keyAsli] !== undefined ? String(row[keyAsli]).trim() : "";
-
-            if (fungsiMap) {
-              nilaiAsli = fungsiMap(kolomTarget, nilaiAsli, row);
-            }
-
+            if (fungsiMap) nilaiAsli = fungsiMap(kolomTarget, nilaiAsli, row);
             rowBaru[kolomTarget] = nilaiAsli === "" ? "-" : nilaiAsli;
           });
           return rowBaru;
@@ -75,7 +67,7 @@ document.getElementById("inputExcel").addEventListener("change", function (e) {
         }
       }
 
-      // 1. Eksekusi Data BILLPER
+      // 1. BILLPER
       prosesSheetData(
         "BILLPER APRIL",
         ["CCA", "SND", "PAID", "SND_GROUP", "NCLI", "NAMA_NCLI", "BILL_AMOUNT", "NOMER TLP", "STO_DESC", "PRODUK", "BUNDLING", "USAGE_DESC", "NAMA"],
@@ -98,7 +90,7 @@ document.getElementById("inputExcel").addEventListener("change", function (e) {
         },
       );
 
-      // 2. Eksekusi Data PRANPC
+      // 2. PRANPC
       prosesSheetData(
         "PRANPC APRIL",
         ["SND", "PAID MARET", "PAID APRIL", "NOMOR TELP", "DATEL", "NAMA PELANGGAN", "USAGE_DESC", "UMUR CUSTOMER", "HASIL CARING"],
@@ -126,7 +118,7 @@ document.getElementById("inputExcel").addEventListener("change", function (e) {
         },
       );
 
-      // 3. Eksekusi Data C3MR
+      // 3. C3MR
       prosesSheetData(
         "C3MR APRIL",
         ["SND", "SND_GROUP", "PAID", "NCLI", "DATEL", "NAMA PELANGGAN", "USAGE_DESC", "BILL_AMOUNT"],
@@ -165,13 +157,11 @@ function tampilkanTabel(data, containerId, namaSheet) {
   let html = "<table><thead><tr>";
   Object.keys(data[0]).forEach((header) => (html += `<th>${header}</th>`));
   html += "</tr></thead><tbody>";
-
   data.forEach((row) => {
     html += "<tr>";
     Object.values(row).forEach((isi) => (html += `<td>${isi}</td>`));
     html += "</tr>";
   });
-
   html += "</tbody></table>";
   container.innerHTML = html;
 
@@ -221,18 +211,29 @@ function downloadSemua() {
 
 function kirimKeTelegram() {
   const wb = XLSX.utils.book_new();
-  const tableBillper = document.querySelector("#data-billper table");
+  const sheets = [
+    { id: "data-billper", nama: "BILLPER" },
+    { id: "data-pranpc", nama: "PRANPC" },
+    { id: "data-c3mr", nama: "C3MR" },
+  ];
 
-  if (!tableBillper) {
-    alert("Data BILLPER kosong atau belum diproses!");
+  let adaData = false;
+  sheets.forEach(({ id, nama }) => {
+    const table = document.querySelector(`#${id} table`);
+    if (table) {
+      const ws = XLSX.utils.table_to_sheet(table);
+      XLSX.utils.book_append_sheet(wb, ws, nama);
+      adaData = true;
+    }
+  });
+
+  if (!adaData) {
+    alert("Belum ada data yang bisa dikirim! Pastikan file sudah diproses.");
     return;
   }
 
-  const ws = XLSX.utils.table_to_sheet(tableBillper);
-  XLSX.utils.book_append_sheet(wb, ws, "BILLPER");
-
   const btnKirim = document.getElementById("btn-kirim-telegram");
-  btnKirim.innerText = "⏳ Mengirim BILLPER...";
+  btnKirim.innerText = "⏳ Mengirim Data...";
   btnKirim.disabled = true;
 
   const wbout = XLSX.write(wb, { bookType: "xlsx", type: "array" });
@@ -240,7 +241,7 @@ function kirimKeTelegram() {
 
   const sekarang = new Date();
   const tgl = `${sekarang.getDate().toString().padStart(2, "0")}${(sekarang.getMonth() + 1).toString().padStart(2, "0")}${sekarang.getFullYear()}`;
-  const namaFile = `HASIL_BILLPER_GIANYAR_${tgl}.xlsx`;
+  const namaFile = `HASIL_FILTER_ALL_GIANYAR_${tgl}.xlsx`;
 
   const formData = new FormData();
   formData.append("file", blob, namaFile);
@@ -252,7 +253,7 @@ function kirimKeTelegram() {
     .then((response) => response.json())
     .then((data) => {
       if (data.status === "success") {
-        alert("✅ Data BILLPER Berhasil dikirim ke Telegram!");
+        alert("✅ Data BILLPER, PRANPC, dan C3MR berhasil dikirim ke Telegram!");
       } else {
         alert("❌ Terjadi kesalahan pada server bot.");
       }
@@ -261,7 +262,7 @@ function kirimKeTelegram() {
     })
     .catch((error) => {
       console.error("Error:", error);
-      alert("❌ Gagal mengirim. Pastikan server Flask sedang berjalan.");
+      alert("❌ Gagal mengirim. Pastikan server Flask (server.py) sedang berjalan.");
       btnKirim.innerText = "✈️ Kirim ke Telegram";
       btnKirim.disabled = false;
     });
