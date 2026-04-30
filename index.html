@@ -3,34 +3,80 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Filter Excel Telkom Gianyar</title>
+    <title>Filter Excel Telkom Gianyar & POI Map</title>
     <link rel="stylesheet" href="style.css" />
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   </head>
   <body>
     <h1>Telkom Gianyar</h1>
 
-    <!-- Timestamp muncul di sini -->
-    <div id="timestamp-info" style="font-size: 13px; color: gray; margin-bottom: 12px"></div>
+    <div id="timestamp-info" style="font-size: 13px; color: gray; margin-bottom: 12px; text-align: center"></div>
 
-    <div class="upload-container">
-      <label for="inputExcel">Pilih File Excel:</label>
-      <input type="file" id="inputExcel" accept=".xlsx, .xls" />
+    <div class="upload-wrapper">
+      <div class="upload-container">
+        <p style="margin-top: 0; margin-bottom: 15px; color: #7f8c8d; font-size: 14px; font-weight: bold">1. Unggah Data Filter Tabel (Excel)</p>
+        <label for="inputExcelFilter" class="custom-file-upload"> 📁 Pilih File Excel </label>
+        <input type="file" id="inputExcelFilter" accept=".xlsx, .xls" />
+        <span id="file-name-filter" class="file-name-display">Belum ada file</span>
+      </div>
+
+      <div class="upload-container">
+        <p style="margin-top: 0; margin-bottom: 15px; color: #7f8c8d; font-size: 14px; font-weight: bold">2. Unggah Data Target Peta (CSV)</p>
+        <label for="inputCSVPOI" class="custom-file-upload"> 🗺️ Pilih File CSV POI </label>
+        <input type="file" id="inputCSVPOI" accept=".csv, .xlsx, .xls" />
+        <span id="file-name-poi" class="file-name-display">Belum ada file</span>
+      </div>
     </div>
 
-    <input type="text" id="kolomCari" onkeyup="cariData()" placeholder="Cari di semua hasil filter..." />
+    <h3 style="margin-bottom: 5px; color: #2c3e50">Pencarian Filter Tabel Excel</h3>
+    <input type="text" id="kolomCari" onkeyup="cariDataTabel()" placeholder="🔍 Cari data pelanggan di tabel (BILLPER, PRANPC, C3MR)..." />
 
     <h2>Sheet: BILLPER</h2>
-    <div id="status-billper" class="status-info">Silakan unggah file Excel untuk memproses data.</div>
+    <div id="status-billper" class="status-info">Silakan unggah file Excel di kolom 1 untuk memproses.</div>
     <div id="data-billper" class="table-container"></div>
 
     <h2>Sheet: PRANPC</h2>
-    <div id="status-pranpc" class="status-info">Silakan unggah file Excel untuk memproses data.</div>
+    <div id="status-pranpc" class="status-info">Silakan unggah file Excel di kolom 1 untuk memproses.</div>
     <div id="data-pranpc" class="table-container"></div>
 
     <h2>Sheet: C3MR</h2>
-    <div id="status-c3mr" class="status-info">Silakan unggah file Excel untuk memproses data.</div>
+    <div id="status-c3mr" class="status-info">Silakan unggah file Excel di kolom 1 untuk memproses.</div>
     <div id="data-c3mr" class="table-container"></div>
+
+    <hr style="margin-top: 50px; border-top: 1px solid #ccc" />
+
+    <h2>Peta Target Prospek Gianyar</h2>
+    <p style="color: #7f8c8d; font-size: 14px; margin-bottom: 20px">Gunakan filter kecamatan untuk menyortir area. Ketik di kolom pencarian global untuk mencari lokasi di seluruh zona yang sudah termuat.</p>
+
+    <div class="total-mapping-info">
+      <h3>Statistik Pemetaan Global</h3>
+      <p>Target Terdeteksi (Maps): <span id="stat-maps" class="stat-number">0</span></p>
+      <p>Target Terdeteksi (CSV): <span id="stat-csv" class="stat-number">0</span></p>
+      <p class="stat-highlight">Total Seluruh Target: <span id="stat-total" class="stat-number stat-big">0</span></p>
+    </div>
+
+    <div class="map-controls">
+      <select id="filterKecamatan" onchange="filterZonaKecamatan()">
+        <option value="ALL">📍 Semua Kecamatan</option>
+        <option value="Gianyar">Kecamatan Gianyar</option>
+        <option value="Ubud">Kecamatan Ubud</option>
+        <option value="Tampaksiring">Kecamatan Tampaksiring</option>
+        <option value="Tegallalang">Kecamatan Tegallalang</option>
+        <option value="Blahbatuh">Kecamatan Blahbatuh</option>
+        <option value="Payangan">Kecamatan Payangan</option>
+      </select>
+
+      <input type="text" id="searchGlobalPOI" onkeyup="cariGlobalPOI()" placeholder="🌍 Cari lokasi atau kategori POI di seluruh Gianyar..." />
+    </div>
+
+    <div class="map-container">
+      <div id="map"></div>
+      <div id="poi-panel" class="poi-panel">
+        <p style="text-align: center; color: #7f8c8d; margin-top: 50px">Klik salah satu zona di peta untuk memuat target spesifik desa tersebut.</p>
+      </div>
+    </div>
 
     <script src="script.js"></script>
   </body>
