@@ -53,14 +53,37 @@ document.getElementById("inputExcelFilter").addEventListener("change", function 
       });
       document.getElementById("timestamp-info") && (document.getElementById("timestamp-info").innerText = "Update Terakhir: " + timestamp);
 
+      // Cari sheet berdasarkan kata kunci utama (tanpa bulan), prioritaskan yang ada "MEI"/"APRIL"/dll
       function cariSheet(keyword) {
-        return workbook.SheetNames.find((n) => n.trim().toUpperCase().includes(keyword.toUpperCase()));
+        const names = workbook.SheetNames;
+        // Prioritas: cocok persis dengan keyword
+        let found = names.find((n) => n.trim().toUpperCase().includes(keyword.toUpperCase()));
+        if (found) return found;
+        // Fallback: cari hanya berdasarkan kata kunci utama tanpa bulan
+        const keyBase = keyword.replace(/\s*(APRIL|MEI|MARET|JUNI|JULI|AGUSTUS|SEPTEMBER|OKTOBER|NOVEMBER|DESEMBER|JANUARI|FEBRUARI)\s*/gi, "").trim();
+        return names.find((n) => n.trim().toUpperCase().includes(keyBase.toUpperCase()));
+      }
+
+      // Deteksi otomatis sheet BILLPER, PRANPC, C3MR tanpa terikat nama bulan
+      function cariSheetFleksibel(namaBase) {
+        const names = workbook.SheetNames;
+        // Cari sheet yang mengandung nama base (misal "BILLPER", "PRANPC", "C3MR")
+        // Prioritaskan sheet data utama (bukan REKAP, PIV, TREMS, WO)
+        const excludePrefix = ["REKAP", "PIV", "TREMS", "WO"];
+        const found = names.find((n) => {
+          const up = n.trim().toUpperCase();
+          const isBase = up.includes(namaBase.toUpperCase());
+          const isExcluded = excludePrefix.some((ex) => up.startsWith(ex));
+          return isBase && !isExcluded;
+        });
+        return found || null;
       }
 
       function prosesSheetData(keywordSheet, kolomDibutuhkan, fungsiFilter, elementIdData, elementIdStatus, fungsiMap) {
         const statusElement = document.getElementById(elementIdStatus);
         const container = document.getElementById(elementIdData);
-        const actualSheetName = cariSheet(keywordSheet);
+        // Cari sheet secara fleksibel berdasarkan nama base (BILLPER / PRANPC / C3MR)
+        const actualSheetName = cariSheetFleksibel(keywordSheet);
 
         if (!actualSheetName) {
           statusElement.innerText = `Catatan: Sheet "${keywordSheet}" tidak ditemukan di file ini.`;
@@ -98,15 +121,15 @@ document.getElementById("inputExcelFilter").addEventListener("change", function 
       }
 
       prosesSheetData(
-        "BILLPER APRIL",
-        ["CCA", "SND", "PAID", "SND_GROUP", "NCLI", "NAMA_NCLI", "BILL_AMOUNT", "NOMER TLP", "STO_DESC", "PRODUK", "BUNDLING", "USAGE_DESC", "NAMA"],
+        "BILLPER",
+        ["CCA", "SND", "PAID", "SND_GROUP", "NCLI", "NAMA_NCLI", "BILL_AMOUNT", "NO TELP", "STO_DESC", "PRODUK", "BUNDLING", "USAGE_DESC"],
         (row) => {
           const keyPaid = Object.keys(row).find((k) => normalisasiTeks(k) === "PAID");
           const valPaid = keyPaid && row[keyPaid] !== undefined ? String(row[keyPaid]).trim() : "";
-          const cekPaid = valPaid === "" || valPaid === "-" || valPaid.toUpperCase() === "#N/A";
+          const cekPaid = valPaid === "" || valPaid === "-" || valPaid === "0" || valPaid.toUpperCase() === "#N/A";
           const keySto = Object.keys(row).find((k) => normalisasiTeks(k) === "STODESC");
           const valSto = keySto && row[keySto] !== undefined ? String(row[keySto]).toUpperCase().trim() : "";
-          const cekSto = valSto.startsWith("GIN") || valSto.startsWith("UBU") || valSto.startsWith("TPS");
+          const cekSto = valSto === "" || valSto.startsWith("GIN") || valSto.startsWith("UBU") || valSto.startsWith("TPS");
           return cekPaid && cekSto;
         },
         "data-billper",
@@ -117,32 +140,56 @@ document.getElementById("inputExcelFilter").addEventListener("change", function 
         },
       );
 
+      // Deteksi kolom PAID dinamis untuk PRANPC (bisa PAID MARET/APRIL/MEI dll)
+      const sheetPranpc = cariSheetFleksibel("PRANPC");
+      let kolomPranpc = ["SND", "PAID BULAN LALU", "PAID BULAN INI", "NOMOR TELP", "DATEL", "NAMA PELANGGAN", "USAGE_DESC", "UMUR CUSTOMER", "HASIL CARING"];
+      let labelPaidLalu = "PAID BULAN LALU";
+      let labelPaidIni = "PAID BULAN INI";
+      if (sheetPranpc) {
+        const sheetDataRaw = XLSX.utils.sheet_to_json(workbook.Sheets[sheetPranpc], { raw: true, defval: "", header: 1 });
+        if (sheetDataRaw.length > 0) {
+          const headerRow = sheetDataRaw[0].map(String);
+          // Cari semua kolom yang dimulai dengan "PAID"
+          const paidCols = headerRow.filter((h) => h.trim().toUpperCase().startsWith("PAID"));
+          if (paidCols.length >= 2) {
+            labelPaidLalu = paidCols[0];
+            labelPaidIni = paidCols[1];
+          } else if (paidCols.length === 1) {
+            labelPaidLalu = paidCols[0];
+            labelPaidIni = paidCols[0];
+          }
+          kolomPranpc = ["SND", labelPaidLalu, labelPaidIni, "NOMOR TELP", "DATEL", "NAMA PELANGGAN", "USAGE_DESC", "UMUR CUSTOMER", "HASIL CARING"];
+        }
+      }
+
       prosesSheetData(
-        "PRANPC APRIL",
-        ["SND", "PAID MARET", "PAID APRIL", "NOMOR TELP", "DATEL", "NAMA PELANGGAN", "USAGE_DESC", "UMUR CUSTOMER", "HASIL CARING"],
+        "PRANPC",
+        kolomPranpc,
         (row) => {
           const keyDatel = Object.keys(row).find((k) => normalisasiTeks(k).includes("DATEL"));
           const valDatel = keyDatel && row[keyDatel] ? String(row[keyDatel]).toUpperCase() : "";
           const cekDatel = valDatel.includes("91804") || valDatel.includes("91084") || valDatel.includes("GIANYAR");
-          const keyPaidFeb = Object.keys(row).find((k) => normalisasiTeks(k).includes("PAIDFEBRUARI"));
-          const valPaidFeb = keyPaidFeb && row[keyPaidFeb] !== undefined ? String(row[keyPaidFeb]).trim() : "";
-          const cekFeb = valPaidFeb === "0" || valPaidFeb === "" || valPaidFeb === "-";
-          const keyPaidMar = Object.keys(row).find((k) => normalisasiTeks(k).includes("PAIDMARET"));
-          const valPaidMar = keyPaidMar && row[keyPaidMar] !== undefined ? String(row[keyPaidMar]).trim() : "";
-          const cekMar = valPaidMar === "0" || valPaidMar === "" || valPaidMar === "-" || valPaidMar.includes("1900") || valPaidMar.includes("1899");
-          return cekDatel && cekFeb && cekMar;
+          // Cek PAID kolom pertama (bulan lalu)
+          const keyPaidLalu = Object.keys(row).find((k) => normalisasiTeks(k) === normalisasiTeks(labelPaidLalu));
+          const valPaidLalu = keyPaidLalu && row[keyPaidLalu] !== undefined ? String(row[keyPaidLalu]).trim() : "";
+          const cekLalu = valPaidLalu === "0" || valPaidLalu === "" || valPaidLalu === "-" || valPaidLalu.includes("1900") || valPaidLalu.includes("1899");
+          // Cek PAID kolom kedua (bulan ini)
+          const keyPaidIni = Object.keys(row).find((k) => normalisasiTeks(k) === normalisasiTeks(labelPaidIni));
+          const valPaidIni = keyPaidIni && row[keyPaidIni] !== undefined ? String(row[keyPaidIni]).trim() : "";
+          const cekIni = valPaidIni === "0" || valPaidIni === "" || valPaidIni === "-";
+          return cekDatel && cekLalu && cekIni;
         },
         "data-pranpc",
         "status-pranpc",
         function (kolomTarget, nilai) {
-          if (kolomTarget === "PAID MARET") return "00.01.1900";
-          if (kolomTarget === "PAID APRIL") return "0";
+          if (kolomTarget === labelPaidLalu) return "0";
+          if (kolomTarget === labelPaidIni) return "0";
           return nilai;
         },
       );
 
       prosesSheetData(
-        "C3MR APRIL",
+        "C3MR",
         ["SND", "SND_GROUP", "PAID", "NCLI", "DATEL", "NAMA PELANGGAN", "USAGE_DESC", "BILL_AMOUNT"],
         (row) => {
           const keyDatel = Object.keys(row).find((k) => normalisasiTeks(k).includes("DATEL"));
@@ -181,6 +228,8 @@ function cariDataTabel() {
 
 function tampilkanTabel(data, containerId, namaSheet) {
   const container = document.getElementById(containerId);
+
+  // 1. Buat Tabel HTML
   let html = "<table><thead><tr>";
   Object.keys(data[0]).forEach((header) => {
     html += `<th>${header}</th>`;
@@ -196,19 +245,88 @@ function tampilkanTabel(data, containerId, namaSheet) {
   html += "</tbody></table>";
   container.innerHTML = html;
 
-  if (!document.getElementById("action-buttons")) {
+  // 2. Cek apakah tombol sudah ada, jika belum, buatkan (Bagian ini Opsi 1)
+  if (!document.getElementById("btn-kirim-telegram")) {
     const btnWrap = document.createElement("div");
-    btnWrap.id = "action-buttons";
     btnWrap.style = "margin: 16px 0; display: flex; gap: 10px;";
     btnWrap.innerHTML = `
-      <button id="btn-download-semua" onclick="downloadSemua()" style="padding:8px 20px;cursor:pointer;background:#1a7f4b;color:white;border:none;border-radius:4px;font-size:14px;font-weight:bold;">
+      <button onclick="downloadSemua()" style="padding:8px 20px;cursor:pointer;background:#1a7f4b;color:white;border:none;border-radius:4px;font-weight:bold;">
         ⬇ Download Semua
       </button>
-      <button id="btn-kirim-telegram" onclick="kirimKeTelegram()" style="padding:8px 20px;cursor:pointer;background:#0088cc;color:white;border:none;border-radius:4px;font-size:14px;font-weight:bold;">
+      <button id="btn-kirim-telegram" onclick="kirimKeTelegram()" style="padding:8px 20px;cursor:pointer;background:#0088cc;color:white;border:none;border-radius:4px;font-weight:bold;">
         ✈️ Kirim ke Telegram
       </button>
     `;
-    document.getElementById("data-billper").before(btnWrap);
+    // Memasukkan tombol sebelum tabel data
+    container.before(btnWrap);
+  }
+}
+
+async function kirimKeTelegram() {
+  // 1. Gabungkan semua sheet (BILLPER, PRANPC, C3MR) ke dalam 1 workbook Excel
+  const wb = XLSX.utils.book_new();
+  const sheets = [
+    { id: "data-billper", nama: "BILLPER" },
+    { id: "data-pranpc", nama: "PRANPC" },
+    { id: "data-c3mr", nama: "C3MR" },
+  ];
+
+  let adaData = false;
+  sheets.forEach(({ id, nama }) => {
+    const table = document.querySelector(`#${id} table`);
+    if (table) {
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.table_to_sheet(table), nama);
+      adaData = true;
+    }
+  });
+
+  if (!adaData) {
+    return alert("Belum ada data hasil filter yang bisa dikirim!");
+  }
+
+  // 2. Konversi workbook ke blob Excel
+  const wbout = XLSX.write(wb, { bookType: "xlsx", type: "array" });
+  const blob = new Blob([wbout], { type: "application/octet-stream" });
+
+  const formData = new FormData();
+  const nowWITA = new Date(new Date().toLocaleString("en-US", { timeZone: "Asia/Makassar" }));
+  const pad = (n) => String(n).padStart(2, "0");
+  const namaFile = `RekapGin_${pad(nowWITA.getDate())}-${pad(nowWITA.getMonth() + 1)}-${nowWITA.getFullYear()}_pukul${pad(nowWITA.getHours())}${pad(nowWITA.getMinutes())}WITA.xlsx`;
+  formData.append("file", blob, namaFile);
+
+  // 3. Kirim ke backend Flask (server.py)
+  const btn = document.getElementById("btn-kirim-telegram");
+  if (btn) {
+    btn.innerText = "⏳ Mengirim...";
+    btn.disabled = true;
+  }
+
+  try {
+    const response = await fetch("http://127.0.0.1:5000/upload-excel", {
+      method: "POST",
+      body: formData,
+    });
+
+    const result = await response.json();
+    if (response.ok) {
+      const jumlahSheet = sheets.filter(({ id }) => document.querySelector(`#${id} table`)).length;
+      alert(
+        `✅ Data berhasil dikirim ke grup Telegram!\n(${jumlahSheet} sheet: ${sheets
+          .filter(({ id }) => document.querySelector(`#${id} table`))
+          .map((s) => s.nama)
+          .join(", ")})`,
+      );
+    } else {
+      alert("❌ Gagal: " + (result.error || "Terjadi kesalahan server"));
+    }
+  } catch (error) {
+    console.error(error);
+    alert("❌ Koneksi ke backend gagal. Pastikan 'python server.py' sudah menyala di port 5000.");
+  } finally {
+    if (btn) {
+      btn.innerText = "✈️ Kirim ke Telegram";
+      btn.disabled = false;
+    }
   }
 }
 
@@ -229,10 +347,6 @@ function downloadSemua() {
   });
   if (!adaData) return alert("Belum ada data yang bisa didownload!");
   XLSX.writeFile(wb, `HASIL_FILTER_GIANYAR.xlsx`);
-}
-
-function kirimKeTelegram() {
-  alert("Sistem kirim Telegram membutuhkan backend aktif. Pastikan server lokal Anda menyala.");
 }
 
 // ==========================================
